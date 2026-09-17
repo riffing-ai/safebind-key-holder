@@ -1,0 +1,28 @@
+{
+  "name": "@safebind/keyholder",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SafeBind's key holder: the contract (GET /public-key, POST /unwrap, GET /health) and the open-source Cloudflare Worker a publisher deploys into their own account to hold the key their session evidence is wrapped to. The worker that seals imports only ./contract. The seal worker's tests also import ./holder, ./holderCore, ./sqliteTestStore and ./testWrap so its clients are exercised against the real holder in-process.",
+  "exports": {
+    "./contract": "./src/contract.ts",
+    "./holder": "./src/holder.ts",
+    "./holderCore": "./src/holderCore.ts",
+    "./sqliteTestStore": "./src/sqliteTestStore.ts",
+    "./testWrap": "./src/testWrap.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "lint": "biome check src",
+    "deploy": "wrangler deploy",
+    "init": "bun scripts/init.mjs",
+    "exercise": "bun scripts/exercise.mjs"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250101.0",
+    "@types/bun": "^1.1.0",
+    "typescript": "^5.6.0",
+    "wrangler": "^4.84.1"
+  }
+}

@@ -1,0 +1,179 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  SafeBind key holder on AWS KMS (docs/CIPA_PHASE5_KEY_HOLDER_PLAN.md section 6). One asymmetric RSA-2048
+  key that SafeBind's tag wraps session keys to, and three IAM roles - one per purpose (derive, qa,
+  release) - that SafeBind assumes to call kms:Decrypt. Each role is revocable on its own by deleting it
+  or editing its trust policy. CloudTrail in this account is the audit log: every AssumeRole carries the
+  purpose and SafeBind's request id in the session name and the certificate id as SourceIdentity.
+  Rotation: create a second key by setting SecondKey=true (or add your own key tagged
+  safebind-key-holder=true) and register its ARN in SafeBind's console; prior keys keep decrypting.
+
+Parameters:
+  SafeBindPrincipalArn:
+    Type: String
+    Description: The AWS principal SafeBind calls from (given to you in SafeBind's console).
+  SafeBindAccountId:
+    Type: String
+    Description: Your SafeBind account id (a UUID). Used as the ExternalId every role requires.
+    AllowedPattern: "^[0-9a-fA-F-]{36}$"
+  SecondKey:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Create a second key (rotation). Register its ARN in SafeBind's console afterwards.
+
+Conditions:
+  WantSecondKey: !Equals [!Ref SecondKey, "true"]
+
+Resources:
+  HolderKey:
+    Type: AWS::KMS::Key
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Description: SafeBind key holder - session keys are wrapped to this key in the browser
+      KeySpec: RSA_2048
+      KeyUsage: ENCRYPT_DECRYPT
+      PendingWindowInDays: 30
+      Tags:
+        - Key: safebind-key-holder
+          Value: "true"
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AccountAdministration
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: kms:*
+            Resource: "*"
+          - Sid: SafeBindRolesDecrypt
+            Effect: Allow
+            Principal:
+              AWS:
+                - !GetAtt DeriveRole.Arn
+                - !GetAtt QaRole.Arn
+                - !GetAtt ReleaseRole.Arn
+            Action:
+              - kms:Decrypt
+              - kms:GetPublicKey
+              - kms:DescribeKey
+            Resource: "*"
+
+  HolderKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/safebind-key-holder
+      TargetKeyId: !Ref HolderKey
+
+  SecondHolderKey:
+    Type: AWS::KMS::Key
+    Condition: WantSecondKey
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Description: SafeBind key holder - rotated key
+      KeySpec: RSA_2048
+      KeyUsage: ENCRYPT_DECRYPT
+      PendingWindowInDays: 30
+      Tags:
+        - Key: safebind-key-holder
+          Value: "true"
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AccountAdministration
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: kms:*
+            Resource: "*"
+          - Sid: SafeBindRolesDecrypt
+            Effect: Allow
+            Principal:
+              AWS:
+                - !GetAtt DeriveRole.Arn
+                - !GetAtt QaRole.Arn
+                - !GetAtt ReleaseRole.Arn
+            Action:
+              - kms:Decrypt
+              - kms:GetPublicKey
+              - kms:DescribeKey
+            Resource: "*"
+
+  # One role per purpose. Revoke a purpose by deleting its role or removing SafeBind from its trust
+  # policy; the other two keep working. The identity policy allows Decrypt on EVERY key in this account
+  # tagged safebind-key-holder=true, so a rotated-in key needs no policy change.
+  DeriveRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: SafeBindKeyHolderDerive
+      AssumeRolePolicyDocument: !Sub |
+        {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":"${SafeBindPrincipalArn}"},
+          "Action":["sts:AssumeRole","sts:SetSourceIdentity"],"Condition":{"StringEquals":{"sts:ExternalId":"${SafeBindAccountId}"}}}]}
+      Policies:
+        - PolicyName: SafeBindKeyHolderDecrypt
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [kms:Decrypt, kms:GetPublicKey, kms:DescribeKey]
+                Resource: !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*
+                Condition:
+                  StringEquals:
+                    aws:ResourceTag/safebind-key-holder: "true"
+
+  QaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: SafeBindKeyHolderQa
+      AssumeRolePolicyDocument: !Sub |
+        {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":"${SafeBindPrincipalArn}"},
+          "Action":["sts:AssumeRole","sts:SetSourceIdentity"],"Condition":{"StringEquals":{"sts:ExternalId":"${SafeBindAccountId}"}}}]}
+      Policies:
+        - PolicyName: SafeBindKeyHolderDecrypt
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [kms:Decrypt]
+                Resource: !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*
+                Condition:
+                  StringEquals:
+                    aws:ResourceTag/safebind-key-holder: "true"
+
+  ReleaseRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: SafeBindKeyHolderRelease
+      AssumeRolePolicyDocument: !Sub |
+        {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":"${SafeBindPrincipalArn}"},
+          "Action":["sts:AssumeRole","sts:SetSourceIdentity"],"Condition":{"StringEquals":{"sts:ExternalId":"${SafeBindAccountId}"}}}]}
+      Policies:
+        - PolicyName: SafeBindKeyHolderDecrypt
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [kms:Decrypt]
+                Resource: !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*
+                Condition:
+                  StringEquals:
+                    aws:ResourceTag/safebind-key-holder: "true"
+
+Outputs:
+  KeyArn:
+    Description: Register this in SafeBind's console (Settings -> Key holder -> AWS KMS).
+    Value: !GetAtt HolderKey.Arn
+  SecondKeyArn:
+    Condition: WantSecondKey
+    Description: The rotated key. Add it in SafeBind's console (Settings -> Key holder -> Add key).
+    Value: !GetAtt SecondHolderKey.Arn
+  DeriveRoleArn:
+    Value: !GetAtt DeriveRole.Arn
+  QaRoleArn:
+    Value: !GetAtt QaRole.Arn
+  ReleaseRoleArn:
+    Value: !GetAtt ReleaseRole.Arn
+  Region:
+    Value: !Ref AWS::Region

@@ -1,0 +1,19 @@
+{
+  // SafeBind key holder — deployed by the PUBLISHER into the publisher's own Cloudflare account
+  // (Workers Free plan is enough; README.md has the limits). SafeBind never holds this deployment's
+  // admin token or its private key.
+  "name": "safebind-key-holder",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-01-01",
+  "workers_dev": true,
+  // One Durable Object holds the key material, the credential hashes and the audit log. SQLite-backed,
+  // so initialisation, rotation and every audit append are strongly consistent (CONTRACT.md).
+  "durable_objects": {
+    "bindings": [{ "name": "HOLDER", "class_name": "Holder" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Holder"] }],
+  // Every unwrap is also printed as one JSON line, so Workers Logs (3 days on Free, 7 on Paid) and
+  // Logpush carry the same record the audit table keeps for as long as the object exists.
+  "observability": { "enabled": true }
+  // HOLDER_ADMIN_TOKEN is a wrangler SECRET, set by `bun run init` — never a var here.
+}
