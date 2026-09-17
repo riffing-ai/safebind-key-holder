@@ -6,8 +6,9 @@ writing one line in a log you own for every call. SafeBind never holds the priva
 the admin token that controls this deployment.
 
 What it gives you, in plain terms: SafeBind receives your session evidence already encrypted, cannot open
-it on its own, and every open it performs (at the consumer's affirmation, for a bounded quality check, or
-for a retrieval you paid for) is a line in your log, with its purpose.
+it on its own, and every open it performs (after a session has ended, or sooner when you or your buyer
+ask for its certificate; for a bounded quality check; or for a retrieval you paid for) is a line in your
+log, with its purpose.
 
 **One sentence to keep in mind:** *key loss destroys your evidence, and there is no recovery.* The private
 key never leaves this Worker's storage and there is no export. Do not delete the Worker or its Durable

@@ -4,7 +4,7 @@ Description: >-
   key that SafeBind's tag wraps session keys to, and three IAM roles - one per purpose (derive, qa,
   release) - that SafeBind assumes to call kms:Decrypt. Each role is revocable on its own by deleting it
   or editing its trust policy. CloudTrail in this account is the audit log: every AssumeRole carries the
-  purpose and SafeBind's request id in the session name and the certificate id as SourceIdentity.
+  purpose and SafeBind's request id in the session name (which SafeBind maps to the certificate in its own ledger).
   Rotation: create a second key by setting SecondKey=true (or add your own key tagged
   safebind-key-holder=true) and register its ARN in SafeBind's console; prior keys keep decrypting.
 
@@ -110,7 +110,7 @@ Resources:
       RoleName: SafeBindKeyHolderDerive
       AssumeRolePolicyDocument: !Sub |
         {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":"${SafeBindPrincipalArn}"},
-          "Action":["sts:AssumeRole","sts:SetSourceIdentity"],"Condition":{"StringEquals":{"sts:ExternalId":"${SafeBindAccountId}"}}}]}
+          "Action":["sts:AssumeRole"],"Condition":{"StringEquals":{"sts:ExternalId":"${SafeBindAccountId}"}}}]}
       Policies:
         - PolicyName: SafeBindKeyHolderDecrypt
           PolicyDocument:
@@ -129,7 +129,7 @@ Resources:
       RoleName: SafeBindKeyHolderQa
       AssumeRolePolicyDocument: !Sub |
         {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":"${SafeBindPrincipalArn}"},
-          "Action":["sts:AssumeRole","sts:SetSourceIdentity"],"Condition":{"StringEquals":{"sts:ExternalId":"${SafeBindAccountId}"}}}]}
+          "Action":["sts:AssumeRole"],"Condition":{"StringEquals":{"sts:ExternalId":"${SafeBindAccountId}"}}}]}
       Policies:
         - PolicyName: SafeBindKeyHolderDecrypt
           PolicyDocument:
@@ -148,7 +148,7 @@ Resources:
       RoleName: SafeBindKeyHolderRelease
       AssumeRolePolicyDocument: !Sub |
         {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":"${SafeBindPrincipalArn}"},
-          "Action":["sts:AssumeRole","sts:SetSourceIdentity"],"Condition":{"StringEquals":{"sts:ExternalId":"${SafeBindAccountId}"}}}]}
+          "Action":["sts:AssumeRole"],"Condition":{"StringEquals":{"sts:ExternalId":"${SafeBindAccountId}"}}}]}
       Policies:
         - PolicyName: SafeBindKeyHolderDecrypt
           PolicyDocument:
